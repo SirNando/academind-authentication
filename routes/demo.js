@@ -11,7 +11,21 @@ router.get("/", function (req, res) {
 });
 
 router.get("/signup", function (req, res) {
-  res.render("signup");
+  let sessionInputData = req.session.inputData;
+  if(!sessionInputData) {
+    sessionInputData = {
+      hasError: false,
+      message: '',
+      email: '',
+      confirmedEmail: '',
+      password: ''
+    };
+  };
+
+  // We delete the session's input data so that the wrong user/password does not persist
+  req.session.inputData = null;
+
+  res.render("signup", {inputData: sessionInputData});
 });
 
 router.get("/login", function (req, res) {
@@ -32,8 +46,18 @@ router.post("/signup", async function (req, res) {
     enteredEmail !== enteredConfirmEmail ||
     !enteredEmail.includes("@")
   ) {
-    console.log('Incorrect data');
-    return res.redirect('/signup');
+    req.session.inputData = {
+      hasError: true,
+      message: 'Invalid input - please check your data',
+      email: enteredEmail,
+      confirmedEmail: enteredConfirmEmail,
+      password: enteredPassword
+    };
+
+    req.session.save(function() {
+      res.redirect('/signup');
+    });
+    return;
   }
 
   const existingUser = await db.getDb().collection('users').findOne({email: enteredEmail});
@@ -65,7 +89,6 @@ router.post("/login", async function (req, res) {
     .findOne({ email: enteredEmail });
 
   if (!existingUser) {
-    console.log("Could not log in");
     return res.redirect("/login");
   }
 
@@ -75,18 +98,29 @@ router.post("/login", async function (req, res) {
   );
 
   if (!passwordsAreEqual) {
-    console.log("Could not log in (password mismatch)");
     return res.redirect("/login");
   }
 
-  console.log("User was authenticated");
-  res.redirect("/admin");
+  req.session.user = {id: existingUser._id, email: existingUser.email};
+  // Save function forces user session data into the database, then executes the code within.
+  // Useful since the user won't be able to access '/admin' if it's not authenticated.
+  req.session.save(function() {
+    res.redirect("/admin");
+  });
+
 });
 
 router.get("/admin", function (req, res) {
+  // We have to check the user's "ticket"
+  if(!req.session.user) {
+    return res.status(401).render('401');
+  }
   res.render("admin");
 });
 
-router.post("/logout", function (req, res) {});
+router.post("/logout", function (req, res) {
+  req.session.user = null;
+  res.redirect('/');
+});
 
 module.exports = router;

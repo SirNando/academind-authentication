@@ -23,7 +23,10 @@ app.use(session({
   secret: 'super-secret-key-ngl',
   resave: false,
   saveUninitialized: false,
-  store: sessionStore
+  store: sessionStore,
+  cookie: { // We configure the cookie, in this particular example we set a maximum time until deletion
+    maxAge: 60 * 1000 // A thousand miliseconds times 60 AKA 1 minute
+  }
 }));
 
 app.use(demoRoutes);
